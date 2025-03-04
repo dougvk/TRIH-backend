@@ -1,0 +1,115 @@
+---
+description: Apply these rules when creating the project
+globs:
+alwaysApply: true
+---
+## Project Overview
+
+*   **Type:** cursor_project_rules
+*   **Description:** Podcast RSS Feed Processor – A high-performance, Python-based CLI application designed to ingest podcast RSS feeds from remote URLs, clean the episode content using regex and AI-driven approaches, and automatically tag episodes using a predefined static taxonomy. It ensures data integrity through robust logging and a clear separation between test and production modes.
+*   **Primary Goal:** To automate the ingestion, cleaning, and tagging of podcast RSS feed data while maintaining data integrity by logging duplicates and operating in a safe test mode by default.
+
+## Project Structure
+
+### Framework-Specific Routing
+
+*   **Directory Rules:**
+
+    *   `python_3.13`: Utilize a CLI-based command structure with argparse to route command operations.
+    *   Example 1: CLI commands are structured as modules within the `src/` directory (e.g., `src/ingest.py` for feed ingestion).
+    *   Example 2: There is no web routing; functionality is organized by command-driven processing across distinct modules.
+
+### Core Directories
+
+*   **Versioned Structure:**
+
+    *   `src/`: Central directory containing core application logic (ingestion, cleaning, tagging, export, etc.).
+    *   Example 1: `src/ingest.py` → Handles podcast RSS feed fetching and XML parsing using lxml.
+    *   Example 2: `src/clean.py` → Implements a two-stage cleaning process using regex and OpenAI API.
+
+### Key Files
+
+*   **Stack-Versioned Patterns:**
+
+    *   `src/main.py`: The main CLI entry point that initializes the environment (default test mode) and routes commands.
+    *   Example 1: `src/config.py` → Manages configuration and environment variables via python-dotenv.
+    *   Example 2: `src/logger.py` → Sets up logging to both console and local log files.
+
+## Tech Stack Rules
+
+*   **Version Enforcement:**
+
+    *   `python@3.13`: Enforce the use of Python 3.13+ features such as type annotations and f-strings.
+    *   `lxml`: Must be used for robust XML parsing with detailed error handling.
+    *   `sqlite3`: Use SQLite for local data storage with safe handling of duplicate entries.
+    *   `openai`: Integrate the OpenAI API for content cleaning and tagging, acknowledging minimal usage costs.
+    *   `requests`: Utilize for HTTP operations with appropriate timeout and error handling strategies.
+    *   `pytest`: Leverage for comprehensive unit and integration tests.
+    *   `python_dotenv`: Centralize configuration management through a .env file.
+    *   `argparse`: Provide clear CLI interactions and help messages.
+
+## PRD Compliance
+
+*   **Non-Negotiable:**
+
+    *   "The system supports only remote RSS feed ingestion, enforces a default test mode (with explicit production flag to update live data), logs duplicates instead of modifying production data, and provides extensive logging to both console and files."
+
+## App Flow Integration
+
+*   **Stack-Aligned Flow:**
+
+    *   Example: CLI Command Flow → `src/main.py` initializes the environment, kicks off `src/ingest.py` for RSS fetching and parsing, then calls `src/clean.py` for content cleaning, followed by `src/tag.py` for tagging operations. Data is stored in a local SQLite database (typically at `data/episodes.db`).
+
+## Best Practices
+
+*   **python_3.13**
+
+    *   Use type annotations and modern Python features (e.g., f-strings) for clarity and performance.
+    *   Organize the project into modular components, each handling a specific functionality (ingest, clean, tag, export).
+    *   Ensure strict separation between test and production environments; default to test mode unless a production flag is explicitly provided.
+    *   Implement comprehensive error handling and robust logging for live feedback and debugging.
+    *   Write thorough unit and integration tests using pytest.
+
+*   **requests**
+
+    *   Validate HTTP responses and apply appropriate timeout settings.
+    *   Log HTTP request failures and response codes to troubleshoot connectivity issues.
+    *   Use retry mechanisms for transient network errors if needed.
+
+*   **lxml**
+
+    *   Employ XML schema validation where possible to ensure well-formed feeds.
+    *   Catch and log parsing errors to facilitate debugging.
+    *   Maintain detailed logs for unexpected XML structure issues.
+
+*   **sqlite3**
+
+    *   Utilize parameterized queries to avoid SQL injection, even in a local environment.
+    *   Create and enforce indexes on key fields (e.g., guid, published_date) for optimized queries.
+    *   Log duplicate detections without overwriting existing production records.
+
+*   **openai**
+
+    *   Clearly document API interactions and expected response formats for both cleaning and tagging functions.
+    *   Validate and log API responses, including any unexpected outputs.
+    *   Use separate keys or configurations for test versus production to prevent unintended changes.
+
+*   **python_dotenv**
+
+    *   Centralize configuration and sensitive data within a .env file and ensure it is not hard-coded in the source code.
+    *   Validate the presence of required environment variables at startup.
+    *   Provide clear error messages if configurations are missing or invalid.
+
+*   **argparse**
+
+    *   Offer comprehensive help messages and usage guidelines for all CLI commands.
+    *   Enforce mutually exclusive options for test and production modes to prevent accidental data modifications.
+    *   Log CLI command usage and parameters to assist in debugging and user support.
+
+## Rules
+
+*   Derive folder/file patterns directly from tech_stack_doc versions.
+*   If using Next.js 14 App Router: Enforce an `app/` directory with nested route folders. (Not applicable for this Python CLI project.)
+*   If using Pages Router: Use a `pages/*.tsx` flat structure. (Not applicable for this Python CLI project.)
+*   Mirror this logic for React Router, SvelteKit, etc. (Not applicable for this Python CLI project.)
+*   Never mix version patterns (e.g., do not combine conflicting patterns); adhere strictly to the CLI and module structure defined for this project.

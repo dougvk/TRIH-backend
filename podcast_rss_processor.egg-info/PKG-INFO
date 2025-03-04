@@ -1,0 +1,27 @@
+Metadata-Version: 2.2
+Name: podcast-rss-processor
+Version: 1.0.0
+Summary: A tool for ingesting, cleaning, and tagging podcast RSS feeds
+Home-page: https://github.com/yourusername/podcast-rss-processor
+Author: Your Name
+Author-email: your.email@example.com
+Keywords: podcast,rss,feed,processing,tagging
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.13
+Requires-Dist: requests
+Requires-Dist: lxml
+Requires-Dist: openai
+Requires-Dist: python-dotenv
+Requires-Dist: pytest
+Requires-Dist: pytest-cov
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
