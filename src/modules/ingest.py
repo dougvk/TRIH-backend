@@ -203,16 +203,25 @@ class RSSFeedIngestor:
 def handle_ingest(args):
     """Handle the ingest command from the CLI."""
     try:
-        feed_url = args.feed if hasattr(args, 'feed') else None
+        # Get feed URL from args or environment
+        feed_url = args.feed or os.getenv('RSS_FEED_URL')
+        if not feed_url:
+            raise ValueError("No RSS feed URL provided in args or environment")
+
+        # Reset database if requested
+        if args.reset:
+            db_path = 'data/episodes.db' if os.getenv('ENV_MODE') == 'prod' else 'data/test_episodes.db'
+            try:
+                os.remove(db_path)
+                logger.info(f"Reset: Removed existing database at {db_path}")
+            except FileNotFoundError:
+                logger.info(f"Reset: No existing database found at {db_path}")
+
+        # Perform ingestion
         ingestor = RSSFeedIngestor(feed_url)
         new_count, duplicate_count = ingestor.ingest()
-
-        logger.info(
-            f"Successfully processed RSS feed. "
-            f"Added {new_count} new episodes. "
-            f"Found {duplicate_count} existing episodes."
-        )
+        logger.info("Feed ingestion completed successfully")
 
     except Exception as e:
-        logger.error(f"Failed to process RSS feed: {str(e)}")
+        logger.error(f"Failed to execute ingest command: {str(e)}")
         raise

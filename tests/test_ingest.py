@@ -3,6 +3,8 @@ from unittest.mock import patch, MagicMock
 from src.modules.ingest import RSSFeedIngestor, handle_ingest
 import requests
 from lxml import etree
+import os
+from pathlib import Path
 
 @pytest.fixture
 def sample_rss_content():
@@ -223,16 +225,17 @@ def test_handle_ingest_success():
 def test_handle_ingest_no_feed_url():
     mock_args = MagicMock()
     mock_args.feed = None
-    
-    with patch('src.modules.ingest.RSSFeedIngestor') as mock_ingestor_class:
+    mock_args.reset = False
+
+    with patch('src.modules.ingest.RSSFeedIngestor') as mock_ingestor_class, \
+         patch.dict(os.environ, {'RSS_FEED_URL': ''}):  # Empty feed URL in env
         mock_ingestor = MagicMock()
         mock_ingestor.ingest.return_value = (3, 1)
         mock_ingestor_class.return_value = mock_ingestor
-        
-        handle_ingest(mock_args)
-        
-        mock_ingestor_class.assert_called_once_with(None)
-        mock_ingestor.ingest.assert_called_once()
+
+        with pytest.raises(ValueError) as exc_info:
+            handle_ingest(mock_args)
+        assert str(exc_info.value) == "No RSS feed URL provided in args or environment"
 
 def test_handle_ingest_error():
     mock_args = MagicMock()
@@ -245,4 +248,61 @@ def test_handle_ingest_error():
         
         with pytest.raises(Exception) as exc_info:
             handle_ingest(mock_args)
-        assert str(exc_info.value) == 'Ingest error' 
+        assert str(exc_info.value) == 'Ingest error'
+
+@patch('src.modules.ingest.RSSFeedIngestor')
+@patch('src.modules.database.Database')
+def test_handle_ingest_with_reset(mock_db_class, mock_ingestor_class):
+    """Test handling ingest command with reset flag."""
+    # Set up mocks
+    mock_ingestor = MagicMock()
+    mock_ingestor.ingest.return_value = (5, 0)  # 5 new episodes, 0 duplicates
+    mock_ingestor_class.return_value = mock_ingestor
+
+    mock_db = MagicMock()
+    mock_db_class.return_value = mock_db
+    mock_db.__enter__.return_value = mock_db
+
+    # Create a dummy database file
+    test_db = 'data/test_episodes.db'
+    os.makedirs('data', exist_ok=True)
+    Path(test_db).touch()
+    assert os.path.exists(test_db)
+    old_mtime = os.path.getmtime(test_db)
+
+    # Create args with reset flag
+    args = MagicMock()
+    args.feed = 'https://example.com/feed.xml'
+    args.reset = True
+
+    handle_ingest(args)
+
+    # Check that database was reset
+    assert not os.path.exists(test_db) or os.path.getmtime(test_db) > old_mtime
+    mock_ingestor_class.assert_called_once_with('https://example.com/feed.xml')
+    mock_ingestor.ingest.assert_called_once()
+
+@patch('src.modules.ingest.RSSFeedIngestor')
+def test_handle_ingest_without_reset(mock_ingestor_class):
+    """Test handling ingest command without reset flag."""
+    mock_ingestor = MagicMock()
+    mock_ingestor.ingest.return_value = (5, 0)  # 5 new episodes, 0 duplicates
+    mock_ingestor_class.return_value = mock_ingestor
+
+    # Create a dummy database file
+    test_db = 'data/test_episodes.db'
+    os.makedirs('data', exist_ok=True)
+    Path(test_db).touch()
+    old_mtime = os.path.getmtime(test_db)
+
+    # Create args without reset flag
+    args = MagicMock()
+    args.feed = 'https://example.com/feed.xml'
+    args.reset = False
+
+    handle_ingest(args)
+
+    # Check that database file wasn't deleted (same modification time)
+    assert os.path.getmtime(test_db) == old_mtime
+    mock_ingestor_class.assert_called_once_with('https://example.com/feed.xml')
+    mock_ingestor.ingest.assert_called_once() 

@@ -61,6 +61,11 @@ def create_parser():
     ingest_parser = subparsers.add_parser(
         'ingest', help='Ingest episodes from RSS feed')
     ingest_parser.add_argument('--feed', help='RSS feed URL (overrides .env)')
+    ingest_parser.add_argument(
+        '--reset',
+        action='store_true',
+        help='Reset the database before ingesting (removes existing database file)'
+    )
 
     # Clean command
     clean_parser = subparsers.add_parser(
@@ -94,6 +99,11 @@ def create_parser():
         help='Export format (default: json)'
     )
     export_parser.add_argument('--output', help='Output file path')
+    export_parser.add_argument(
+        '--limit',
+        type=int,
+        help='Limit the number of episodes to export (ordered by most recent first)'
+    )
 
     # Validate command
     validate_parser = subparsers.add_parser(
@@ -123,15 +133,15 @@ def main():
 
     try:
         if args.command == 'ingest':
-            handle_ingest(args.feed)
+            handle_ingest(args)
         elif args.command == 'clean':
-            handle_clean()
+            handle_clean(args)
         elif args.command == 'tag':
-            handle_tag()
+            handle_tag(args)
         elif args.command == 'export':
-            handle_export(args.format, args.output)
+            handle_export(args)
         elif args.command == 'validate':
-            handle_validate()
+            handle_validate(args)
     except Exception as e:
         logger.error("Error executing command %s: %s", args.command, str(e))
         sys.exit(1)

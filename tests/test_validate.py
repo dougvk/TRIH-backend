@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 from src.modules.validate import TagValidator, handle_validate
 from pathlib import Path
 import os
+from src.modules.database import Database
 
 @pytest.fixture
 def sample_episode():
@@ -253,3 +254,64 @@ def test_handle_validate_error():
         with pytest.raises(Exception) as exc_info:
             handle_validate(mock_args)
         assert str(exc_info.value) == 'Validation error'
+
+def test_validate_series_episode_numbers():
+    """Test that series episodes have episode numbers and non-series episodes don't."""
+    with Database() as db:
+        # Get all episodes
+        episodes = db.get_all_episodes()
+        validation_issues = []
+        
+        for episode in episodes:
+            format_tags = episode['format_tags'].split(',') if episode['format_tags'] else []
+            
+            # Regular series episodes should have episode numbers
+            if 'Series Episodes' in format_tags and 'RIHC Series' not in format_tags:
+                if episode['episode_number'] is None:
+                    validation_issues.append(
+                        f"Series episode {episode['id']} ({episode['title']}) should have an episode number"
+                    )
+            
+            # Standalone episodes should not have episode numbers
+            if 'Standalone Episodes' in format_tags:
+                if episode['episode_number'] is not None:
+                    validation_issues.append(
+                        f"Standalone episode {episode['id']} ({episode['title']}) should not have episode number {episode['episode_number']}"
+                    )
+            
+            # RIHC Series episodes can optionally have episode numbers
+            if 'RIHC Series' in format_tags:
+                # No validation needed as these can have optional episode numbers
+                pass
+
+        # Report all validation issues
+        if validation_issues:
+            print("\nValidation Issues Found:")
+            for issue in validation_issues:
+                print(f"- {issue}")
+            assert False, f"\n{len(validation_issues)} validation issues found. See above for details."
+
+def test_validate_no_tagged_before_cleaned():
+    """Test that no episodes are tagged before being cleaned."""
+    with Database() as db:
+        # Get all episodes
+        episodes = db.get_all_episodes()
+        validation_issues = []
+        
+        for episode in episodes:
+            # Check if episode is tagged but not cleaned
+            if episode.get('status') == 'tagged' and episode.get('cleaned_at') is None:
+                validation_issues.append(
+                    f"Episode {episode['id']} ({episode['title']}) is tagged but has not been cleaned"
+                )
+            elif episode.get('status') is None:
+                validation_issues.append(
+                    f"Episode {episode['id']} ({episode['title']}) has no status field"
+                )
+        
+        # Report all validation issues
+        if validation_issues:
+            print("\nValidation Issues Found:")
+            for issue in validation_issues:
+                print(f"- {issue}")
+            assert False, f"\n{len(validation_issues)} validation issues found. See above for details."

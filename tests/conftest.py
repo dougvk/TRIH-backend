@@ -2,6 +2,8 @@ import os
 import pytest
 import sqlite3
 from dotenv import load_dotenv
+import tempfile
+from pathlib import Path
 
 @pytest.fixture(scope="session", autouse=True)
 def load_env():
@@ -9,15 +11,26 @@ def load_env():
     load_dotenv()
     os.environ["ENV_MODE"] = "test"
 
+@pytest.fixture(autouse=True)
+def test_db_path(tmp_path):
+    """Create a temporary database path and set it in environment."""
+    db_path = tmp_path / "test.db"
+    old_db_path = os.environ.get('DB_PATH_TEST')
+    os.environ['DB_PATH_TEST'] = str(db_path)
+    yield str(db_path)
+    # Clean up
+    if db_path.exists():
+        db_path.unlink()
+    if old_db_path:
+        os.environ['DB_PATH_TEST'] = old_db_path
+    else:
+        del os.environ['DB_PATH_TEST']
+
 @pytest.fixture
-def test_db():
+def test_db(test_db_path):
     """Create a temporary test database."""
-    db_path = "data/test_episodes.db"
-    # Ensure the data directory exists
-    os.makedirs("data", exist_ok=True)
-    
     # Create a new database connection
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(test_db_path)
     cursor = conn.cursor()
     
     # Create the episodes table
@@ -54,8 +67,6 @@ def test_db():
     
     # Cleanup
     conn.close()
-    if os.path.exists(db_path):
-        os.remove(db_path)
 
 @pytest.fixture
 def sample_episode():

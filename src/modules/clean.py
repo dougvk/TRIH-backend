@@ -5,7 +5,7 @@ Module for cleaning podcast episode descriptions using regex and OpenAI.
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, List, Optional, Tuple
 
 import openai
@@ -23,6 +23,7 @@ class ContentCleaner:
         """Initialize the content cleaner."""
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         self.openai_model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        self.db = Database()
 
         if not self.openai_api_key:
             raise ValueError(
@@ -61,6 +62,15 @@ class ContentCleaner:
                 self.promo_patterns),
             re.IGNORECASE | re.DOTALL)
 
+    def __enter__(self):
+        """Context manager entry."""
+        self.db.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.db.__exit__(exc_type, exc_val, exc_tb)
+
     def apply_regex_cleaning(self, text: str) -> str:
         """Apply regex-based cleaning to remove promotional content."""
         return self.promo_regex.sub('', text).strip()
@@ -78,6 +88,8 @@ class ContentCleaner:
             3. Maintaining the core content and important information
             4. Keeping the tone consistent with the original
             5. Preserving any important links or references
+            6. Remove any references to social media platforms
+            7. Remove any producer or other credits
 
             Description:
             {text}
@@ -119,46 +131,46 @@ class ContentCleaner:
         Returns True if cleaning was successful.
         """
         try:
-            with Database() as db:
-                # Get episode
-                episode = db.get_episode(episode_id)
-                if not episode:
-                    logger.warning(f"Episode not found: {episode_id}")
-                    return False
+            # Get episode
+            episode = self.db.get_episode(episode_id)
+            if not episode:
+                logger.warning(f"Episode not found: {episode_id}")
+                return False
 
-                # Skip if already cleaned
-                if episode['cleaning_status'] == 'completed':
-                    logger.info(f"Episode {episode_id} already cleaned")
-                    return True
+            # Skip if already cleaned
+            if episode['cleaning_status'] == 'completed':
+                logger.info(f"Episode {episode_id} already cleaned")
+                return True
 
-                original_desc = episode['description']
-                if not original_desc:
-                    logger.warning(
-                        f"Episode {episode_id} has no description to clean")
-                    return False
+            original_desc = episode['description']
+            if not original_desc:
+                logger.warning(
+                    f"Episode {episode_id} has no description to clean")
+                return False
 
-                # Stage 1: Regex cleaning
-                regex_cleaned = self.apply_regex_cleaning(original_desc)
+            # Stage 1: Regex cleaning
+            regex_cleaned = self.apply_regex_cleaning(original_desc)
 
-                # Stage 2: AI cleaning
-                final_cleaned, ai_success = self.clean_with_ai(regex_cleaned)
+            # Stage 2: AI cleaning
+            final_cleaned, ai_success = self.clean_with_ai(regex_cleaned)
 
-                # Update database
-                update_data = {
-                    'cleaned_description': final_cleaned,
-                    'cleaning_status': 'completed' if ai_success else 'failed',
-                    'cleaning_timestamp': datetime.utcnow().isoformat()
-                }
+            # Update database
+            update_data = {
+                'cleaned_description': final_cleaned,
+                'cleaning_status': 'completed' if ai_success else 'failed',
+                'cleaning_timestamp': datetime.now(UTC).isoformat(),
+                'status': 'cleaned'  # Update status to cleaned
+            }
 
-                success = db.update_episode(episode_id, update_data)
+            success = self.db.update_episode(episode_id, update_data)
 
-                if success:
-                    logger.info(f"Successfully cleaned episode {episode_id}")
-                else:
-                    logger.error(
-                        f"Failed to update episode {episode_id} after cleaning")
+            if success:
+                logger.info(f"Successfully cleaned episode {episode_id}")
+            else:
+                logger.error(
+                    f"Failed to update episode {episode_id} after cleaning")
 
-                return success
+            return success
 
         except Exception as e:
             logger.error(f"Error cleaning episode {episode_id}: {str(e)}")
@@ -173,14 +185,13 @@ class ContentCleaner:
             success_count = 0
             failure_count = 0
 
-            with Database() as db:
-                pending_episodes = db.get_episodes_by_status('pending')
+            pending_episodes = self.db.get_episodes_by_status('pending')
 
-                for episode in pending_episodes:
-                    if self.clean_episode(episode['id']):
-                        success_count += 1
-                    else:
-                        failure_count += 1
+            for episode in pending_episodes:
+                if self.clean_episode(episode['id']):
+                    success_count += 1
+                else:
+                    failure_count += 1
 
             logger.info(
                 f"Batch cleaning complete. "
@@ -197,28 +208,27 @@ class ContentCleaner:
 def handle_clean(args):
     """Handle the clean command from the CLI."""
     try:
-        cleaner = ContentCleaner()
+        with ContentCleaner() as cleaner:
+            if hasattr(args, 'id') and args.id is not None:
+                # Clean specific episode
+                success = cleaner.clean_episode(args.id)
+                if success:
+                    logger.info(f"Successfully cleaned episode {args.id}")
+                else:
+                    logger.error(f"Failed to clean episode {args.id}")
 
-        if hasattr(args, 'id') and args.id is not None:
-            # Clean specific episode
-            success = cleaner.clean_episode(args.id)
-            if success:
-                logger.info(f"Successfully cleaned episode {args.id}")
+            elif hasattr(args, 'all') and args.all:
+                # Clean all pending episodes
+                success_count, failure_count = cleaner.clean_all_pending()
+                logger.info(
+                    f"Batch cleaning completed. "
+                    f"Successfully cleaned {success_count} episodes. "
+                    f"Failed to clean {failure_count} episodes."
+                )
+
             else:
-                logger.error(f"Failed to clean episode {args.id}")
-
-        elif hasattr(args, 'all') and args.all:
-            # Clean all pending episodes
-            success_count, failure_count = cleaner.clean_all_pending()
-            logger.info(
-                f"Batch cleaning completed. "
-                f"Successfully cleaned {success_count} episodes. "
-                f"Failed to clean {failure_count} episodes."
-            )
-
-        else:
-            logger.error(
-                "No valid cleaning option specified (--id or --all required)")
+                logger.error(
+                    "No valid cleaning option specified (--id or --all required)")
 
     except Exception as e:
         logger.error(f"Failed to execute clean command: {str(e)}")

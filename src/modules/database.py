@@ -82,9 +82,12 @@ class Database:
                     audio_url TEXT,
                     cleaning_timestamp TIMESTAMP,
                     cleaning_status TEXT DEFAULT 'pending',
-                    tags TEXT,  -- JSON string storing taxonomy tags
-                    tagging_timestamp TIMESTAMP,
+                    format_tags TEXT,
+                    theme_tags TEXT,
+                    track_tags TEXT,
                     episode_number INTEGER,
+                    tags TEXT,
+                    status TEXT DEFAULT 'new',
                     created_at TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                     updated_at TIMESTAMP DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
                 )
@@ -99,6 +102,8 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_cleaning_status ON episodes(cleaning_status)")
             self.cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_episode_number ON episodes(episode_number)")
+            self.cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_status ON episodes(status)")
 
             # Create trigger to update the updated_at timestamp
             self.cursor.execute("""
@@ -214,10 +219,7 @@ class Database:
                 (status,)
             )
             rows = self.cursor.fetchall()
-            return [
-                {**dict(row), 'tags': json.loads(row['tags']) if row['tags'] else None}
-                for row in rows
-            ]
+            return [dict(row) for row in rows]
         except sqlite3.Error as e:
             logger.error(f"Error retrieving episodes by status: {str(e)}")
             raise
@@ -229,10 +231,7 @@ class Database:
                 "SELECT * FROM episodes ORDER BY published_date DESC"
             )
             rows = self.cursor.fetchall()
-            return [
-                {**dict(row), 'tags': json.loads(row['tags']) if row['tags'] else None}
-                for row in rows
-            ]
+            return [dict(row) for row in rows]
         except sqlite3.Error as e:
             logger.error(f"Error retrieving all episodes: {str(e)}")
             raise

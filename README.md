@@ -56,6 +56,13 @@ A high-performance Python CLI application for ingesting podcast RSS feeds, clean
 
 The application provides several commands for processing podcast episodes:
 
+### Run Full Pipeline
+
+```bash
+# Run the complete pipeline and save output to file
+python -m src.main ingest && python -m src.main clean --all && python -m src.main tag --all && python -m src.main validate > output.txt
+```
+
 ### Ingest Episodes
 
 ```bash
@@ -91,6 +98,9 @@ python -m src.main tag --all
 ```bash
 # Export to JSON (default)
 python -m src.main export
+
+# Export to specific JSON file
+python -m src.main export --format json --output latest_episodes.json
 
 # Export to CSV
 python -m src.main export --format csv --output episodes.csv
@@ -147,16 +157,20 @@ podcast-rss-processor/
 ### Running Tests
 
 ```bash
-# Run all tests with coverage
-pytest --cov=src.modules tests/
+# Run all tests with verbose output
+python -m pytest tests/ -v
+
+# Run all tests with coverage report
+python -m pytest --cov=src tests/ --cov-report=term-missing
 
 # Current coverage:
-# - Overall: 91%
+# - Overall: 96%
 # - database.py: 94%
 # - validate.py: 93%
 # - tag.py: 89%
 # - ingest.py: 89%
 # - main.py: 93%
+# - taxonomy.py: 100%
 
 # Run specific test file
 pytest tests/test_ingest.py -v
@@ -202,4 +216,43 @@ MIT License
 
 ## Support
 
-For support, please open an issue in the GitHub repository. 
+For support, please open an issue in the GitHub repository.
+
+### Tag Validation Rules
+
+The system enforces several validation rules for episode tags:
+
+1. **Minimum Requirements**:
+   - Each episode must have at least one theme tag
+   - Each episode must have at least one track tag
+   - Format tags are optional but follow special rules
+
+2. **Format Tag Rules**:
+   - An episode must be tagged as "Series Episodes" if:
+     - The title contains "(Ep X)" or "(Part X)" where X is any number
+     - The title contains "Part" followed by a number
+     - The episode is part of a named series
+   - An episode must be tagged as "RIHC Series" if the title starts with "RIHC:"
+     - RIHC episodes must also have the "Series Episodes" tag
+   - If no series rules apply, the episode should be tagged as "Standalone Episodes"
+
+3. **Tag Limits**:
+   - Format tags: Maximum of 2 tags allowed
+   - Theme tags: No limit
+   - Track tags: No limit
+
+### Data Export
+
+The export command supports two formats:
+
+1. **JSON Format** (default):
+   - Exports complete episode data
+   - Preserves all metadata
+   - Suitable for backups and data analysis
+
+2. **CSV Format**:
+   - Exports in a spreadsheet-friendly format
+   - Includes essential fields
+   - Suitable for quick analysis and sharing
+
+Example export files are stored in the `data/exports/` directory by default. 

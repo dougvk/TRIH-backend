@@ -5,7 +5,8 @@ Module for automated tagging of podcast episodes using OpenAI.
 import json
 import logging
 import os
-from datetime import datetime
+import re
+from datetime import datetime, UTC
 from typing import Dict, List, Optional, Tuple, Union
 
 from openai import OpenAI
@@ -34,13 +35,14 @@ class EpisodeTagger:
                       title: str,
                       description: str) -> Tuple[List[str],
                                                  List[str],
-                                                 List[str]]:
+                                                 List[str],
+                                                 Optional[int]]:
         """
         Generate format, theme, and track tags using OpenAI.
-        Returns tuple of (format_tags, theme_tags, track_tags).
+        Returns tuple of (format_tags, theme_tags, track_tags, episode_number).
         """
         try:
-            # Prepare available tags for the prompt
+            # Prepare taxonomy text
             format_options = '\n'.join(
                 [f"- {tag}: {desc}" for tag, desc in FORMAT_TAGS.items()])
             theme_options = '\n'.join(
@@ -48,35 +50,66 @@ class EpisodeTagger:
             track_options = '\n'.join(
                 [f"- {tag}: {desc}" for tag, desc in TRACK_TAGS.items()])
 
-            prompt = f"""
-            Analyze this podcast episode and assign appropriate tags from each category.
+            taxonomy_text = f"""Available Tags:
 
-            Episode Title: {title}
-            Episode Description: {description}
+FORMAT TAGS:
+{format_options}
 
-            Available Format Tags (choose 1-2):
-            {format_options}
+THEME TAGS:
+{theme_options}
 
-            Available Theme Tags (choose 1-3):
-            {theme_options}
+TRACK TAGS:
+{track_options}"""
 
-            Available Track Tags (choose 1):
-            {track_options}
+            prompt = f"""You are a history podcast episode tagger. Your task is to analyze this episode and assign ALL relevant tags from the taxonomy below.
 
-            Return your response as a JSON object with three arrays: format_tags, theme_tags, and track_tags.
-            Only use tags from the provided lists. Do not make up new tags.
-            Example response format:
-            {{
-                "format_tags": ["INTERVIEW"],
-                "theme_tags": ["TECHNOLOGY", "BUSINESS"],
-                "track_tags": ["MAIN_SERIES"]
-            }}
-            """
+Episode Title: {title}
+Episode Description: {description}
+
+IMPORTANT RULES:
+1. An episode MUST be tagged as "Series Episodes" if ANY of these are true:
+   - The title contains "(Ep X)" or "(Part X)" where X is any number
+   - The title contains "Part" followed by a number
+   - The episode is part of a named series (e.g. "Young Churchill", "The French Revolution")
+2. An episode MUST be tagged as "RIHC Series" if the title starts with "RIHC:"
+   - RIHC episodes should ALWAYS have both "RIHC Series" and "Series Episodes" in their Format tags
+3. An episode can and should have multiple tags from each category if applicable
+4. If none of the above rules apply, tag it as "Standalone Episodes"
+5. For series episodes, you MUST extract the episode number:
+   - Look for patterns like "(Ep X)", "(Part X)", "Part X", where X is a number
+   - Include the number in your response as "episode_number"
+   - If no explicit number is found, use null for episode_number
+
+{taxonomy_text}
+
+IMPORTANT:
+1. You MUST ONLY use tags EXACTLY as they appear in the taxonomy above
+2. You MUST include Format, Theme, Track, and episode_number in your response
+3. Make sure themes and tracks are from their correct categories (don't use track names as themes)
+4. For Theme and Track:
+   - Apply ALL relevant themes and tracks that match the content
+   - It's common for an episode to have 2-3 themes and 2-3 tracks
+   - Make sure themes and tracks are from their correct categories (don't use track names as themes)
+
+Example responses:
+
+For a RIHC episode about ancient Rome and military history:
+{{"Format": ["RIHC Series", "Series Episodes"], "Theme": ["Ancient & Classical Civilizations", "Military History & Battles"], "Track": ["Roman Track", "Military & Battles Track", "The RIHC Bonus Track"], "episode_number": null}}
+
+For a standalone episode about British history:
+{{"Format": ["Standalone Episodes"], "Theme": ["Regional & National Histories", "Modern Political History & Leadership"], "Track": ["British History Track", "Modern Political History Track"], "episode_number": null}}
+
+For part 3 of a series about Napoleon:
+{{"Format": ["Series Episodes"], "Theme": ["Modern Political History & Leadership", "Military History & Battles"], "Track": ["Modern Political History Track", "Military & Battles Track", "Historical Figures Track"], "episode_number": 3}}
+
+Return tags in this exact JSON format:
+{{"Format": ["tag1", "tag2"], "Theme": ["tag1", "tag2"], "Track": ["tag1", "tag2"], "episode_number": number_or_null}}
+"""
 
             response = self.client.chat.completions.create(
                 model=self.openai_model,
                 messages=[
-                    {"role": "system", "content": "You are a podcast episode tagging assistant."},
+                    {"role": "system", "content": "You are a history podcast episode tagging assistant."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
@@ -87,10 +120,11 @@ class EpisodeTagger:
             # Parse the response
             tags = json.loads(response.choices[0].message.content)
 
-            # Validate tags
-            format_tags = tags.get('format_tags', [])
-            theme_tags = tags.get('theme_tags', [])
-            track_tags = tags.get('track_tags', [])
+            # Extract tags and episode number
+            format_tags = tags.get('Format', [])
+            theme_tags = tags.get('Theme', [])
+            track_tags = tags.get('Track', [])
+            episode_number = tags.get('episode_number')
 
             invalid_tags = validate_tags(format_tags, theme_tags, track_tags)
             if invalid_tags:
@@ -102,17 +136,17 @@ class EpisodeTagger:
 
                 # Only use defaults if no valid tags remain
                 if not format_tags:
-                    format_tags = ['MONOLOGUE']  # Default format
+                    format_tags = ['Standalone Episodes']  # Default format
                 if not theme_tags:
-                    theme_tags = ['GENERAL']  # Default theme
+                    theme_tags = ['General History']  # Default theme
                 if not track_tags:
-                    track_tags = ['MAIN_SERIES']  # Default track
+                    track_tags = ['General History Track']  # Default track
 
-            return format_tags, theme_tags, track_tags
+            return format_tags, theme_tags, track_tags, episode_number
 
         except Exception as e:
             logger.error(f"Error generating tags: {str(e)}")
-            return ['MONOLOGUE'], ['GENERAL'], ['MAIN_SERIES']
+            return ['Standalone Episodes'], ['General History'], ['General History Track'], None
 
     def tag_episode(self, episode_id: int) -> bool:
         """
@@ -135,7 +169,7 @@ class EpisodeTagger:
                     return False
 
                 # Generate tags
-                format_tags, theme_tags, track_tags = self.generate_tags(
+                format_tags, theme_tags, track_tags, episode_number = self.generate_tags(
                     episode['title'],
                     description
                 )
@@ -145,7 +179,9 @@ class EpisodeTagger:
                     'format_tags': ','.join(format_tags),
                     'theme_tags': ','.join(theme_tags),
                     'track_tags': ','.join(track_tags),
-                    'updated_at': datetime.utcnow().isoformat()
+                    'episode_number': episode_number,
+                    'updated_at': datetime.now(UTC).isoformat(),
+                    'status': 'tagged'  # Update status to tagged
                 }
 
                 success = db.update_episode(episode_id, update_data)
@@ -155,7 +191,8 @@ class EpisodeTagger:
                         f"Successfully tagged episode {episode_id} with "
                         f"format: {format_tags}, "
                         f"theme: {theme_tags}, "
-                        f"track: {track_tags}"
+                        f"track: {track_tags}, "
+                        f"episode_number: {episode_number}"
                     )
                 else:
                     logger.error(

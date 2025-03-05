@@ -4,48 +4,52 @@ Static taxonomy definitions for podcast episode tagging.
 
 # Format tags describe the type of episode
 FORMAT_TAGS = {
-    'SERIES_EPISODES': 'Episodes that are part of a series',
-    'STANDALONE_EPISODES': 'Individual, self-contained episodes',
-    'RIHC_SERIES': 'Episodes specifically part of the RIHC series'
+    'Series Episodes': 'Episodes that are part of a series',
+    'Standalone Episodes': 'Individual, self-contained episodes',
+    'RIHC Series': 'Episodes specifically part of the RIHC series'
 }
 
 # Theme tags describe the main historical topics or subjects covered
 THEME_TAGS = {
-    'ANCIENT_CLASSICAL': 'Ancient & Classical Civilizations',
-    'MEDIEVAL_RENAISSANCE': 'Medieval & Renaissance Europe',
-    'EMPIRE_COLONIALISM': 'Empire, Colonialism & Exploration',
-    'MODERN_POLITICAL': 'Modern Political History & Leadership',
-    'MILITARY_BATTLES': 'Military History & Battles',
-    'CULTURAL_SOCIAL': 'Cultural, Social & Intellectual History',
-    'SCIENCE_TECH_ECONOMIC': 'Science, Technology & Economic History',
-    'RELIGIOUS_PHILOSOPHICAL': 'Religious, Ideological & Philosophical History',
-    'HISTORICAL_MYSTERIES': 'Historical Mysteries, Conspiracies & Scandals',
-    'REGIONAL_NATIONAL': 'Regional & National Histories'}
+    'Ancient & Classical Civilizations': 'Ancient & Classical Civilizations',
+    'Medieval History': 'Medieval & Renaissance Europe',
+    'Empire & Colonialism': 'Empire, Colonialism & Exploration',
+    'Modern Political History & Leadership': 'Modern Political History & Leadership',
+    'Military History & Battles': 'Military History & Battles',
+    'Social & Cultural History': 'Cultural, Social & Intellectual History',
+    'Science & Technology': 'Science, Technology & Economic History',
+    'Religious & Philosophical History': 'Religious, Ideological & Philosophical History',
+    'Historical Mysteries': 'Historical Mysteries, Conspiracies & Scandals',
+    'Regional & National Histories': 'Regional & National Histories',
+    'General History': 'General History Topics'
+}
 
 # Track tags describe the specific historical track or series
 TRACK_TAGS = {
-    'ROMAN': 'Roman Track',
-    'MEDIEVAL_RENAISSANCE_TRACK': 'Medieval & Renaissance Track',
-    'COLONIALISM_EXPLORATION': 'Colonialism & Exploration Track',
-    'AMERICAN_HISTORY': 'American History Track',
-    'MILITARY_BATTLES_TRACK': 'Military & Battles Track',
-    'MODERN_POLITICAL_TRACK': 'Modern Political History Track',
-    'CULTURAL_SOCIAL_TRACK': 'Cultural & Social History Track',
-    'SCIENCE_TECH_ECONOMIC_TRACK': 'Science, Technology & Economic History Track',
-    'RELIGIOUS_IDEOLOGICAL': 'Religious & Ideological History Track',
-    'HISTORICAL_MYSTERIES_TRACK': 'Historical Mysteries & Conspiracies Track',
-    'BRITISH_HISTORY': 'British History Track',
-    'GLOBAL_EMPIRES': 'Global Empires Track',
-    'WORLD_WARS': 'World Wars Track',
-    'ANCIENT_CIVILIZATIONS': 'Ancient Civilizations Track',
-    'REGIONAL_LATAM': 'Regional Spotlight: Latin America Track',
-    'REGIONAL_ASIA_ME': 'Regional Spotlight: Asia & the Middle East Track',
-    'REGIONAL_EUROPE': 'Regional Spotlight: Europe Track',
-    'REGIONAL_AFRICA': 'Regional Spotlight: Africa Track',
-    'HISTORICAL_FIGURES': 'Historical Figures Track',
-    'RIHC_BONUS': 'The RIHC Bonus Track',
-    'ARCHIVE_EDITIONS': 'Archive Editions Track',
-    'CONTEMPORARY_ISSUES': 'Contemporary Issues Through History Track'}
+    'Roman Track': 'Roman History Track',
+    'Medieval Track': 'Medieval & Renaissance Track',
+    'Colonial Track': 'Colonialism & Exploration Track',
+    'American History Track': 'American History Track',
+    'Military & Battles Track': 'Military & Battles Track',
+    'Modern Political History Track': 'Modern Political History Track',
+    'Social History Track': 'Cultural & Social History Track',
+    'Science & Technology Track': 'Science, Technology & Economic History Track',
+    'Religious History Track': 'Religious & Ideological History Track',
+    'Historical Mysteries Track': 'Historical Mysteries & Conspiracies Track',
+    'British History Track': 'British History Track',
+    'Global Empires Track': 'Global Empires Track',
+    'World Wars Track': 'World Wars Track',
+    'Ancient Civilizations Track': 'Ancient Civilizations Track',
+    'Latin America Track': 'Regional Spotlight: Latin America Track',
+    'Asia & Middle East Track': 'Regional Spotlight: Asia & the Middle East Track',
+    'European History Track': 'Regional Spotlight: Europe Track',
+    'African History Track': 'Regional Spotlight: Africa Track',
+    'Historical Figures Track': 'Historical Figures Track',
+    'The RIHC Bonus Track': 'The RIHC Bonus Track',
+    'Archive Track': 'Archive Editions Track',
+    'Contemporary History Track': 'Contemporary Issues Through History Track',
+    'General History Track': 'General History Track'
+}
 
 # All available tags combined
 ALL_TAGS = {
@@ -63,7 +67,10 @@ def validate_tags(
     Validate that provided tags exist in the taxonomy.
     Returns a dictionary of invalid tags by category.
 
-    Special validation: If 'RIHC_SERIES' is in format_tags, 'SERIES_EPISODES' must also be present.
+    Special validations:
+    1. If 'RIHC Series' is in format_tags, 'Series Episodes' must also be present
+    2. At least one theme tag is required
+    3. At least one track tag is required
     """
     invalid_tags = {
         'format': [tag for tag in format_tags if tag not in FORMAT_TAGS],
@@ -72,10 +79,21 @@ def validate_tags(
     }
 
     # Special validation for RIHC Series requirement
-    if 'RIHC_SERIES' in format_tags and 'SERIES_EPISODES' not in format_tags:
+    if 'RIHC Series' in format_tags and 'Series Episodes' not in format_tags:
         if 'format' not in invalid_tags:
             invalid_tags['format'] = []
         invalid_tags['format'].append('MISSING_SERIES_EPISODES_FOR_RIHC')
+
+    # Validate minimum requirements
+    if not theme_tags:
+        if 'theme' not in invalid_tags:
+            invalid_tags['theme'] = []
+        invalid_tags['theme'].append('MISSING_THEME')
+
+    if not track_tags:
+        if 'track' not in invalid_tags:
+            invalid_tags['track'] = []
+        invalid_tags['track'].append('MISSING_TRACK')
 
     # Only return categories with invalid tags
     return {k: v for k, v in invalid_tags.items() if v}

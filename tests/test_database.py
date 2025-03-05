@@ -1,7 +1,7 @@
 import pytest
 import sqlite3
 from unittest.mock import patch, MagicMock
-from datetime import datetime
+from datetime import datetime, UTC
 import os
 import json
 from pathlib import Path
@@ -21,7 +21,7 @@ def sample_episode():
         'title': 'Test Episode',
         'description': 'Test description',
         'link': 'https://example.com/episode1',
-        'published_date': datetime.utcnow().isoformat(),
+        'published_date': datetime.now(UTC).isoformat(),
         'duration': '00:30:00',
         'audio_url': 'https://example.com/episode1.mp3'
     }
@@ -77,25 +77,27 @@ def test_json_tag_handling(test_db_path):
             episode_data = {
                 'guid': 'test-guid-json',
                 'title': 'Test JSON Tags',
-                'tags': {'format': ['INTERVIEW'], 'theme': ['TECHNOLOGY']}
+                'format_tags': 'INTERVIEW',
+                'theme_tags': 'TECHNOLOGY',
+                'track_tags': 'TECH_TRACK'
             }
             episode_id = db.insert_episode(episode_data)
             assert episode_id is not None
 
-            # Verify JSON was stored correctly
-            retrieved = db.get_episode(episode_id)
-            assert isinstance(retrieved['tags'], dict)
-            assert retrieved['tags']['format'] == ['INTERVIEW']
-
             # Test update with JSON tags
             update_data = {
-                'tags': {'format': ['PANEL'], 'theme': ['BUSINESS']}
+                'format_tags': 'PODCAST',
+                'theme_tags': 'SCIENCE',
+                'track_tags': 'SCIENCE_TRACK'
             }
-            assert db.update_episode(episode_id, update_data)
+            success = db.update_episode(episode_id, update_data)
+            assert success
 
-            # Verify updated JSON
-            retrieved = db.get_episode(episode_id)
-            assert retrieved['tags']['format'] == ['PANEL']
+            # Verify updated tags
+            episode = db.get_episode(episode_id)
+            assert episode['format_tags'] == 'PODCAST'
+            assert episode['theme_tags'] == 'SCIENCE'
+            assert episode['track_tags'] == 'SCIENCE_TRACK'
 
 def test_insert_error_handling(test_db_path):
     """Test error handling during episode insertion."""
@@ -221,7 +223,7 @@ def test_update_episode(test_db_path, sample_episode):
             update_data = {
                 'title': 'Updated Title',
                 'cleaning_status': 'cleaned',
-                'cleaning_timestamp': datetime.utcnow().isoformat()
+                'cleaning_timestamp': datetime.now(UTC).isoformat()
             }
             assert db.update_episode(episode_id, update_data)
 

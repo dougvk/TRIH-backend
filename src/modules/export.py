@@ -24,32 +24,29 @@ class DataExporter:
 
     def _prepare_episode_data(self, episode: Dict) -> Dict:
         """Prepare episode data for export by converting to appropriate types."""
-        # Convert comma-separated tags to lists
-        format_tags = episode['format_tags'].split(
-            ',') if episode['format_tags'] else []
-        theme_tags = episode['theme_tags'].split(
-            ',') if episode['theme_tags'] else []
-        track_tags = episode['track_tags'].split(
-            ',') if episode['track_tags'] else []
+        # Convert comma-separated tags to lists, handling missing fields
+        format_tags = episode.get('format_tags', '').split(',') if episode.get('format_tags') else []
+        theme_tags = episode.get('theme_tags', '').split(',') if episode.get('theme_tags') else []
+        track_tags = episode.get('track_tags', '').split(',') if episode.get('track_tags') else []
 
         return {
-            'id': episode['id'],
-            'guid': episode['guid'],
-            'title': episode['title'],
-            'description': episode['description'],
-            'cleaned_description': episode['cleaned_description'],
-            'link': episode['link'],
-            'published_date': episode['published_date'],
-            'duration': episode['duration'],
-            'audio_url': episode['audio_url'],
-            'episode_number': episode['episode_number'],
+            'id': episode.get('id'),
+            'guid': episode.get('guid'),
+            'title': episode.get('title'),
+            'description': episode.get('description'),
+            'cleaned_description': episode.get('cleaned_description'),
+            'link': episode.get('link'),
+            'published_date': episode.get('published_date'),
+            'duration': episode.get('duration'),
+            'audio_url': episode.get('audio_url'),
+            'episode_number': episode.get('episode_number'),
             'format_tags': format_tags,
             'theme_tags': theme_tags,
             'track_tags': track_tags,
-            'cleaning_status': episode['cleaning_status'],
-            'cleaning_timestamp': episode['cleaning_timestamp'],
-            'created_at': episode['created_at'],
-            'updated_at': episode['updated_at']
+            'cleaning_status': episode.get('cleaning_status'),
+            'cleaning_timestamp': episode.get('cleaning_timestamp'),
+            'created_at': episode.get('created_at'),
+            'updated_at': episode.get('updated_at')
         }
 
     def export_to_json(self,
@@ -147,13 +144,14 @@ class DataExporter:
             logger.error(f"Error exporting to CSV: {str(e)}")
             raise
 
-    def export(self, output_path: str, format: str = "json") -> bool:
+    def export(self, output_path: str, format: str = "json", limit: Optional[int] = None) -> bool:
         """
         Export episodes to the specified format.
 
         Args:
             output_path: Path to save the exported file
             format: Export format ("json" or "csv")
+            limit: Optional limit on number of episodes to export (ordered by most recent first)
 
         Returns:
             bool: True if export was successful
@@ -162,9 +160,14 @@ class DataExporter:
             ValueError: If format is invalid
         """
         try:
-            # Get all episodes from database
+            # Get episodes from database
             with Database() as db:
                 episodes = db.get_all_episodes()
+                
+            # Sort by published date (most recent first) and apply limit if specified
+            episodes.sort(key=lambda x: x.get('published_date') or '', reverse=True)
+            if limit is not None:
+                episodes = episodes[:limit]
 
             # Export based on format
             if format.lower() == "json":
@@ -193,14 +196,7 @@ def handle_export(args):
             output_path = os.path.join('data', 'exports', filename)
 
         # Perform export
-        if args.format == 'json':
-            exporter.export_to_json(
-                exporter.export(format='json'),
-                output_path
-            )
-        else:  # csv
-            exporter.export(output_path=output_path, format='csv')
-
+        exporter.export(output_path=output_path, format=args.format, limit=args.limit)
         logger.info(f"Export completed successfully to {output_path}")
 
     except Exception as e:

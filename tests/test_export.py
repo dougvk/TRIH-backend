@@ -61,6 +61,26 @@ def test_prepare_episode_data(sample_episodes):
     assert prepared_data["theme_tags"] == ["Military History & Battles"]
     assert prepared_data["track_tags"] == ["Military & Battles Track"]
 
+def test_prepare_episode_data_missing_fields():
+    """Test preparation of episode data with missing fields."""
+    exporter = DataExporter()
+    episode = {
+        "id": 1,
+        "guid": "test-guid-1",
+        "title": "Test Episode 1",
+        # Missing most fields
+    }
+    
+    prepared_data = exporter._prepare_episode_data(episode)
+    
+    assert isinstance(prepared_data, dict)
+    assert prepared_data["guid"] == "test-guid-1"
+    assert prepared_data["format_tags"] == []
+    assert prepared_data["theme_tags"] == []
+    assert prepared_data["track_tags"] == []
+    assert prepared_data["description"] is None
+    assert prepared_data["cleaned_description"] is None
+
 @patch('src.modules.database.Database.get_all_episodes')
 def test_export_to_json(mock_get_all_episodes, sample_episodes, tmp_path):
     """Test exporting episodes to JSON."""
@@ -170,4 +190,22 @@ def test_export_invalid_format(tmp_path):
     
     exporter = DataExporter()
     with pytest.raises(ValueError):
-        exporter.export(str(output_path), "invalid_format") 
+        exporter.export(str(output_path), "invalid_format")
+
+@patch('src.modules.database.Database.get_all_episodes')
+def test_export_with_limit(mock_get_all_episodes, sample_episodes, tmp_path):
+    """Test exporting with a limit on the number of episodes."""
+    mock_get_all_episodes.return_value = sample_episodes
+    output_path = tmp_path / "test_export_limit.json"
+    
+    exporter = DataExporter()
+    result = exporter.export(str(output_path), format='json', limit=1)
+    
+    assert result is True
+    assert output_path.exists()
+    
+    with open(output_path) as f:
+        exported_data = json.load(f)
+        assert len(exported_data) == 1
+        # Should get the most recent episode (sample_episodes[1] has later date)
+        assert exported_data[0]["guid"] == "test-guid-2" 
